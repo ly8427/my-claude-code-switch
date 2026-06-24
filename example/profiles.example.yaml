@@ -1,0 +1,37 @@
+# ccs profiles.yaml example
+#
+# Copy to ~/.config/ccs/profiles.yaml and edit. Secrets should reference
+# environment variables via ${VAR} so they never land in this file:
+#
+#     auth_token: ${DEEPSEEK_API_KEY}
+#
+# Then export those vars (e.g. in ~/.bashrc):
+#
+#     export DEEPSEEK_API_KEY='sk-...'
+
+profiles:
+  official:
+    base_url: https://api.anthropic.com
+    auth_token: ${ANTHROPIC_API_KEY}
+    model: sonnet[1m]
+    effort_level: medium
+    note: official Anthropic API
+
+  relay-deepseek:
+    base_url: https://api.deepseek.com/anthropic
+    auth_token: ${DEEPSEEK_API_KEY}
+    model: deepseek-v4-pro[1m]
+    opus_model: deepseek-v4-pro[1m]
+    sonnet_model: deepseek-v4-pro[1m]
+    haiku_model: deepseek-v4-flash
+    subagent_model: deepseek-v4-flash
+    effort_level: max
+    note: DeepSeek Anthropic-compatible relay endpoint
+
+targets:
+  wsl:
+    kind: wsl
+  # a-container:
+  #   kind: docker
+  #   container: my-agent-container
+  #   path: /root/.claude/settings.json

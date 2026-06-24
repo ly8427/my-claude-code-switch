@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ccs"
+version = "0.1.0"
+description = "Claude Code Switch — flexibly switch ANTHROPIC_* / CLAUDE_CODE_* env vars across WSL and Docker targets"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+tui = ["textual>=0.50"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+ccs = "ccs.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ccs*"]
