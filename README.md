@@ -1,71 +1,74 @@
 # ccs — Claude Code Switch
 
-灵活切换 Claude Code 的 7 个一等环境变量，跨 **WSL** 和 **Docker 容器**两个目标统一管理。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## 为什么需要它
+Flexibly switch the 7 first-class Claude Code environment variables across **WSL** and **Docker** targets — with built-in compatibility shims for relay endpoints.
 
-现有工具（cc-switch、claude-code-router 等）都不能同时满足：
-1. 把这 7 个变量都当**一等字段**管理（而非塞进通用 env）
-2. 同时写 **WSL 本地**和**Docker 容器内**的 `settings.json`
-3. 内建你在中转端点（relay）场景踩过的坑的兜底
+## Why
 
-ccs 就是为此而做。
+Existing tools (cc-switch, claude-code-router, …) don't simultaneously:
 
-## 管理的 7 个变量
+1. Treat these 7 variables as **first-class fields** (instead of stuffing them into a generic env blob),
+2. Write to **both WSL-local and in-container** `settings.json`,
+3. **Auto-handle the pitfalls** you hit on relay/proxy endpoints.
 
-| 字段（短名） | 写入的环境变量 |
+`ccs` exists to fill that gap.
+
+## The 7 managed variables
+
+| Field (short name) | Env var written |
 |---|---|
-| `auth_token` | `ANTHROPIC_AUTH_TOKEN`（+ 自动镜像到 `ANTHROPIC_API_KEY`）|
+| `auth_token` | `ANTHROPIC_AUTH_TOKEN` |
 | `base_url` | `ANTHROPIC_BASE_URL` |
 | `model` | `ANTHROPIC_MODEL` |
 | `opus_model` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
 | `sonnet_model` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
 | `haiku_model` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
 | `subagent_model` | `CLAUDE_CODE_SUBAGENT_MODEL` |
-| `effort_level` | `CLAUDE_CODE_EFFORT_LEVEL`（low/medium/high）|
+| `effort_level` | `CLAUDE_CODE_EFFORT_LEVEL` (`low`/`medium`/`high`/`max`/`auto`) |
 
-## 安装
+## Install
 
 ```bash
-# 在 WSL 里
+# inside WSL
 cd /path/to/ccs
-pip install --user --break-system-packages .          # CLI（依赖 pyyaml）
-pip install --user --break-system-packages '.[tui]'   # 加上 TUI（依赖 textual）
+pip install --user --break-system-packages .          # CLI (depends on pyyaml)
+pip install --user --break-system-packages '.[tui]'   # adds the TUI (depends on textual)
 ```
 
-或直接运行：`python3 -m ccs ...`
+Or run directly: `python3 -m ccs ...`
 
-## 快速开始
+## Quick start
 
 ```bash
-ccs init                      # 生成 ~/.config/ccs/profiles.yaml 模板
-ccs edit                      # 用 $EDITOR 编辑配置
-ccs list                      # 列出所有 profile
-ccs show relay                # 查看某 profile（token 打码）
-ccs health                    # 检查所有目标连通性
-ccs use relay                 # 应用 profile 到所有目标（默认询问确认）
-ccs use relay -t wsl -y       # 只应用到 WSL，跳过确认
-ccs use relay --dry-run       # 只预览，不写入
-ccs diff relay                # 看当前配置与 profile 的差异
-ccs tui                       # 交互式界面
+ccs init                      # generate ~/.config/ccs/profiles.yaml
+ccs edit                      # open it in $EDITOR
+ccs list                      # list profiles
+ccs show relay                # inspect a profile (secrets masked)
+ccs health                    # check all targets are reachable
+ccs use relay                 # apply a profile to all targets (asks first)
+ccs use relay -t wsl -y       # apply to WSL only, no prompt
+ccs use relay --dry-run       # preview, write nothing
+ccs diff relay                # show diff vs current env
+ccs tui                       # interactive UI
 ```
 
-单变量操作：
+Single-variable edits:
 ```bash
 ccs set relay model deepseek-v4-pro
-ccs set relay ANTHROPIC_MODEL sonnet    # 也可用完整环境变量名
+ccs set relay ANTHROPIC_MODEL sonnet    # full env-key name also accepted
 ccs unset relay effort_level
 ```
 
-## 配置文件 profiles.yaml
+## Configuration: profiles.yaml
 
-位置查找顺序：`$CCS_CONFIG` → `~/.config/ccs/profiles.yaml` → `./profiles.yaml`
+Lookup order: `$CCS_CONFIG` → `~/.config/ccs/profiles.yaml` → `./profiles.yaml`
 
 ```yaml
 profiles:
   official:
     base_url: https://api.anthropic.com
-    auth_token: ${ANTHROPIC_API_KEY}     # 从环境变量取值，避免明文
+    auth_token: ${ANTHROPIC_API_KEY}     # resolved from env, never plaintext here
     model: sonnet
     effort_level: medium
 
@@ -78,49 +81,53 @@ profiles:
     haiku_model: deepseek-chat
     subagent_model: deepseek-chat
     effort_level: high
-    note: 中转端点
+    note: relay endpoint
 
 targets:
   wsl:
     kind: wsl
-    # path: ~/.claude/settings.json    # 留空用默认
+    # path: ~/.claude/settings.json    # default if omitted
   feishu:
     kind: docker
     container: feishu-claude-agent
     path: /root/.claude/settings.json
 ```
 
-## 安全保证
+## Safety guarantees
 
-- **合并而非覆盖**：只改 `env` 子对象，绝不碰 `model`/`statusLine`/`permissions`/`hooks` 等其他字段
-- **写前备份**：每次 apply 前备份到 `<dir>/backups/settings.json.bak.<时间戳>`（WSL）或容器内 `settings.json.bak.<时间戳>`（docker）
-- **密钥脱敏**：`show`/`list` 中 token 仅显示首尾；`${ENV_VAR}` 引用解析自环境，不落明文
-- **apply 前预览**：默认展示 diff 并要求确认，`--yes` 跳过
+- **Merge, never overwrite** — only the `env` sub-object is touched; `model`, `statusLine`, `permissions`, `hooks`, `theme`, … are preserved untouched.
+- **Backup before write** — each apply backs up to `<dir>/backups/settings.json.bak.<timestamp>` (WSL) or in-container `settings.json.bak.<timestamp>` (docker).
+- **Secret masking** — tokens show only head/tail in `show`/`list`; `${ENV_VAR}` references resolve from the environment, never stored plaintext.
+- **Preview before apply** — a diff is shown and confirmation required by default; `--yes` skips it.
 
-## 内建的 3 个兼容兜底
+## The 3 built-in compatibility shims
 
-这些坑来自实战（中转端点 relay 场景），现有工具大多未处理：
+These come from real-world relay-endpoint pain; most off-the-shelf switchers miss them:
 
-1. **AUTH_TOKEN → API_KEY 镜像**：Claude Code CLI ≥ 2.1.x 只读 `ANTHROPIC_API_KEY`，会忽略 `ANTHROPIC_AUTH_TOKEN`（表现："Not logged in"）。设了 `auth_token` 时自动镜像。
-2. **relay 端点 Bearer 提示**：非官方 base_url 需走 `Authorization: Bearer`，工具检测到 relay 会给出提醒。
-3. **SDK 模式模型提示**：`ANTHROPIC_MODEL` 在 Claude Agent SDK 下不会被自动读取，需显式传给 `ClaudeAgentOptions`；交互式 CLI 正常。
+1. **Auth-conflict avoidance.** Modern Claude Code (v2.1.159+) flags *both* `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` being set as an "Auth conflict" — even when identical. `ccs` therefore emits **only** `ANTHROPIC_AUTH_TOKEN` by default (Bearer). (An `auth_mode: api_key` override exists for old CLI builds that ignored the token.)
+2. **Relay Bearer heads-up.** When `base_url` is a non-official host, you get a reminder that the token must travel as `Authorization: Bearer`.
+3. **SDK model heads-up.** `ANTHROPIC_MODEL` is **not** read by the Claude Agent SDK — you're warned to pass `model` explicitly to `ClaudeAgentOptions` (the interactive CLI reads it fine).
 
-## 命令速查
+## Command reference
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `init` | 生成配置模板 |
-| `list` | 列出 profile（标记 active）|
-| `show <p>` | 查看 profile 明细 |
-| `use <p> [-t ...] [-y] [-n]` | 应用 profile |
-| `set <p> <var> <val>` | 设置单变量 |
-| `unset <p> <var>` | 清除单变量 |
-| `new <p>` | 交互式新建 |
-| `rm <p>` | 删除 profile |
-| `diff [p] [-t ...]` | 显示差异 |
-| `targets` | 列出目标 |
-| `health [-t ...]` | 目标连通性体检 |
-| `edit` | 用 $EDITOR 编辑配置 |
-| `tui` | 交互式界面 |
+| `init` | generate a starter config |
+| `list` | list profiles (marks active) |
+| `show <p>` | inspect a profile |
+| `use <p> [-t ...] [-y] [-n]` | apply a profile |
+| `set <p> <var> <val>` | set one variable |
+| `unset <p> <var>` | clear one variable |
+| `new <p>` | create a profile interactively |
+| `rm <p>` | delete a profile |
+| `diff [p] [-t ...]` | show differences |
+| `targets` | list targets |
+| `health [-t ...]` | check target reachability |
+| `edit` | open config in `$EDITOR` |
+| `tui` | interactive UI |
 
-`-t/--target` 可重复，或用 glob：`wsl:*`、`docker:*`。留空默认所有目标。
+`-t/--target` repeats, or use a kind glob: `wsl:*`, `docker:*`. Empty = all targets.
+
+## License
+
+MIT
