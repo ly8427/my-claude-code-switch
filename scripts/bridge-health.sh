@@ -15,11 +15,13 @@
 
 set -u
 
-BRIDGE_SERVICE="feishu-bridge"
+BRIDGE_SERVICE="${BRIDGE_SERVICE:-feishu-bridge}"
 CONTAINER="${FEISHU_CONTAINER:-feishu-claude-agent}"
 PROBE_HOST="${PROBE_HOST:-api.deepseek.com}"
 INTERVAL=60
-BRIDGE_LOG="${BRIDGE_LOG:-/bridge.log}"
+# bridge.log path; leave empty to skip the log-based hint (core check
+# is container egress, not log inspection). Override via $BRIDGE_LOG.
+BRIDGE_LOG="${BRIDGE_LOG:-}"
 
 # --- 颜色（非 tty 退化）---
 if [ -t 1 ]; then
