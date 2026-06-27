@@ -8,6 +8,9 @@ Footer keys: [Enter] apply  [e] edit profile  [n] new  [d] diff  [r] refresh  [q
 """
 from __future__ import annotations
 
+import os
+import subprocess
+
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -69,7 +72,7 @@ class CCSApp(App):
         yield Header(name="ccs")
         with Horizontal():
             with Vertical(id="left"):
-                yield ProfileList()
+                yield ProfileList(id="profile-list")
             with Vertical(id="right"):
                 yield VarPanel(id="vars")
                 yield TargetPanel(id="targets")
@@ -104,6 +107,7 @@ class CCSApp(App):
 
     @on(ListView.Selected, "#targets")
     def _toggle_target(self, event: ListView.Selected) -> None:
+        event.stop()
         name = event.item.name
         if name in self._selected_targets:
             self._selected_targets.discard(name)
@@ -111,7 +115,7 @@ class CCSApp(App):
             self._selected_targets.add(name)
         self._refresh_targets()
 
-    @on(ListView.Highlighted, "#left")
+    @on(ListView.Highlighted, "#profile-list")
     def _show_profile(self, event: ListView.Highlighted) -> None:
         if event.item is None or not self.config:
             return
@@ -145,15 +149,9 @@ class CCSApp(App):
 
     def _current_profile_name(self) -> str | None:
         lv = self.query_one(ProfileList)
-        if lv.index is None or not self.config:
+        if lv.index is None or lv.highlighted_child is None:
             return None
-        items = lv.query(ListItem)
-        idx = 0
-        for it in items:
-            if idx == lv.index:
-                return it.name
-            idx += 1
-        return None
+        return lv.highlighted_child.name
 
     def action_diff(self) -> None:
         name = self._current_profile_name()
@@ -170,9 +168,9 @@ class CCSApp(App):
         out = [f"diff: {name}"]
         for tname, target in targets:
             diff = target.preview(env)
-            out.append(f"[{tname}]")
+            out.append(f"\n[{tname}]")
             out.extend(diff or ["(in sync)"])
-        self.query_one(VarPanel).update("\n".join(out))
+        self.notify("\n".join(out), title=f"Diff: {name}", timeout=10)
 
     def action_apply(self) -> None:
         name = self._current_profile_name()
@@ -198,13 +196,23 @@ class CCSApp(App):
             self.config.set_active(name)
             self.config.save()
             self._refresh_profiles()
-        self.query_one(VarPanel).update("\n".join(msg_lines))
+        self.notify("\n".join(msg_lines), title=f"Apply: {name}", timeout=8)
 
     def action_edit_profile(self) -> None:
-        self.bell()  # delegate to `ccs edit` / `ccs set` in a real terminal
+        path = Config.default_path()
+        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or (
+            "nano" if os.name != "nt" else "notepad"
+        )
+        with self.suspend():
+            subprocess.run([editor, str(path)])
+        self.action_refresh()
 
     def action_new_profile(self) -> None:
-        self.bell()  # delegate to `ccs new`
+        self.notify(
+            "Run 'ccs new <name>' from the CLI, or press [b]e[/b] to edit profiles.yaml directly.",
+            title="New Profile",
+            timeout=6,
+        )
 
 
 def run_tui() -> int:
